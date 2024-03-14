@@ -1,0 +1,2 @@
+CREATE TABLE "GCG_5462_PWD" (
+ "PWD" CHAR(6) );

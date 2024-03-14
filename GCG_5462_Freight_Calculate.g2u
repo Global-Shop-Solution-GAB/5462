@@ -1,0 +1,256 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("Vendor Percentage")
+Gui.Form..Size(7350,3435)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.lbl1.Create(Label,"Vendor",True,720,255,0,195,255,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtVendor.Create(TextBox,"",True,900,300,0,960,165,False,0,"Arial",8,-2147483643,1)
+Gui.Form.txtVendor.MaxLength(6)
+Gui.Form.optEnterPct.Create(Option)
+Gui.Form.optEnterPct.Size(1770,255)
+Gui.Form.optEnterPct.Position(255,765)
+Gui.Form.optEnterPct.Caption("Enter Percentage")
+Gui.Form.optEnterPct.TabStop(True)
+Gui.Form.optEnterPct.TabIndex(1)
+Gui.Form.txtPassword.Create(TextBox,"",True,825,300,0,3075,750,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtPassword.MaxLength(6)
+Gui.Form.txtPassword.PasswordChar("*")
+Gui.Form.txtPassword.TabStop(True)
+Gui.Form.txtPassword.TabIndex(2)
+Gui.Form.lbl2.Create(Label,"Password",True,900,255,0,2130,825,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtPct.Create(TextBox,"",True,660,300,0,6300,750,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtPct.MaxLength(6)
+Gui.Form.txtPct.NumericOnly(1)
+Gui.Form.lbl3.Create(Label,"Percent (e.g. 10 for 10%)",True,2025,255,0,4215,825,True,0,"Arial",8,-2147483633,0)
+Gui.Form.optCancel.Create(Option)
+Gui.Form.optCancel.Size(1080,255)
+Gui.Form.optCancel.Position(255,1965)
+Gui.Form.optCancel.Caption("Cancel")
+Gui.Form.optCancel.TabStop(True)
+Gui.Form.optCancel.TabIndex(4)
+Gui.Form.optProceed.Create(Option)
+Gui.Form.optProceed.Size(2910,255)
+Gui.Form.optProceed.Position(255,1380)
+Gui.Form.optProceed.Caption("Proceed with Zero Freight Amount")
+Gui.Form.optProceed.TabStop(True)
+Gui.Form.optProceed.TabIndex(3)
+Gui.Form.cmdOK.Create(Button)
+Gui.Form.cmdOK.Size(1110,375)
+Gui.Form.cmdOK.Position(225,2520)
+Gui.Form.cmdOK.Caption("OK")
+Gui.Form.cmdOK.Event(Click,cmdOK_Click)
+Gui.Form.cmdOK.TabStop(True)
+Gui.Form.cmdOK.TabIndex(5)
+Gui.Form.lbl4.Create(Label,"Name",True,540,255,0,2505,240,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtName.Create(TextBox,"",True,3930,300,0,3075,150,False,0,"Arial",8,-2147483643,1)
+Gui.Form.txtName.MaxLength(30)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, Mar 19, 2019
+'This project will set up the percentage for each vendor (GCG_5462_Maintenance.g2u).
+'At PO Receipt the program, clicking OK button, the program will check the percentage, if there isn't any percentage setup for that vendor, it will prompt user if he wants to proceed.
+'If there is a percentage setup, the calculation of Freight Amount will be done as following: Freight Amount = Percentage * QtyReceived * Purchase Unit Cost.
+'The Amount of the Freight on the PO Receipt screen will be overwritten with the Freight Amount calculated just before the system proceed the OK button.
+'After the OK button is hit, the screen will be cleared out, so user will not see the Freight calculated.
+'That's why we add the feature View Freight attached to Script 1 button. If clicked (before click OK button), user can see the Freight Amount calculated.
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	'Purchasing > Transaction > PO Receipts
+	f.ODBC.Connection!conx.OpenCompanyConnection
+	'Pre OK hook
+	f.Intrinsic.Control.If(v.Caller.Hook,=,15041)	
+		f.Intrinsic.Control.CallSub("Check_Percentage_And_Prompt")		
+	'Populate hook
+	f.Intrinsic.control.ElseIf(v.Caller.Hook,=,15020)
+		Variable.Passed.000316.Set("View Freight")	
+		F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000008,"LOCK",1)
+		F.Intrinsic.UI.ChangeCallerProperty(Variable.Passed.000149,"LOCK",1)
+	'Script 1 button
+	f.Intrinsic.control.ElseIf(v.Caller.Hook,=,15050)
+		f.Intrinsic.Control.If(v.Passed.000004.Trim,<>,"")
+			f.Intrinsic.Control.CallSub("Calculate_Freight_Cost_and_Update")
+		f.Intrinsic.Control.EndIf		
+	f.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Main.End
+
+Program.Sub.Check_Percentage_And_Prompt.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	v.Local.sRet.Declare
+	v.Local.fPercent.Declare
+	v.Local.sFlag.Declare	
+
+	'Check the percentage
+	f.Intrinsic.String.Build("Select Percent from GCG_5462_Pct where Vendor = '{0}'",Variable.Passed.000004,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+	v.Local.fPercent.Set(v.Local.sRet)
+	f.Intrinsic.Control.If(v.Local.fPercent,=,0)
+		gui.Form.txtVendor.Text(Variable.Passed.000004)
+		f.Intrinsic.String.Build("Select NAME_VENDOR from V_Vendor_Master where Vendor = '{0}'",v.Passed.000004,v.Local.sSQL)
+		f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+		gui.Form.txtName.Text(v.Local.sRet.left30)
+		gui.Form.optCancel.Value(True)
+		gui.Form..Show
+	f.Intrinsic.Control.Else
+		f.Intrinsic.Control.CallSub("Calculate_Freight_Cost_and_Update")
+	f.Intrinsic.Control.EndIf	
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Check_Percentage_And_Prompt.End
+
+Program.Sub.cmdOK_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	v.Local.sRet.Declare
+	v.Local.fPercent.Declare
+	v.Local.sFlag.Declare	
+	v.Local.sPassword.Declare	
+	
+	f.Intrinsic.Control.If(v.Screen.Form!optCancel.Value,=,True)
+		v.Passed.777777.Set(1)
+		f.Intrinsic.Control.CallSub("Unload")
+	f.Intrinsic.Control.Elseif(v.Screen.Form!optProceed.Value,=,True)
+		'Proceed with 0 Freight Amount
+		Variable.Passed.000008.Set("0")
+		Variable.Passed.000149.Set("0")
+		f.Intrinsic.Control.CallSub("Unload")
+	f.Intrinsic.Control.Elseif(v.Screen.Form!optEnterPct.Value,=,True)
+		'Validate Percent
+		v.Local.fPercent.Set(v.Screen.Form!txtPct.Text)
+		f.Intrinsic.Control.If(v.Local.fPercent,<=,0)
+			f.Intrinsic.UI.Msgbox("Percent must be positive","Invalid Percentage")
+			f.Intrinsic.Control.ExitSub
+		f.Intrinsic.Control.EndIf
+		'Validate Password
+		v.Local.sPassword.Set(v.Screen.Form!txtPassword.Text)
+		f.ODBC.Connection!conx.ExecuteAndReturn("Select top 1 PWD from GCG_5462_PWD",v.Local.sRet)
+		f.Intrinsic.Control.If(v.Local.sRet,<>,v.Local.sPassword)
+			f.Intrinsic.UI.Msgbox("Incorrect Password","Attention")
+			f.Intrinsic.Control.ExitSub
+		f.Intrinsic.Control.EndIf
+		'Set Vendor Percent	
+		f.Intrinsic.String.Build("Select * from GCG_5462_Pct where Vendor = '{0}'",v.Screen.Form!txtVendor.Text,v.Local.sSQL)
+		f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+		f.Intrinsic.Control.If(v.Local.sRet,=,"")
+			f.Intrinsic.String.Build("Insert into GCG_5462_Pct (Vendor,Name,Percent) values('{0}','{1}',{2})",v.Screen.Form!txtVendor.Text,v.Screen.Form!txtName.Text,v.Local.fPercent,v.Local.sSQL)
+		f.Intrinsic.Control.Else
+			f.Intrinsic.String.Build("Update GCG_5462_Pct set Name = '{1}', Percent = {2} where Vendor = '{0}'",v.Screen.Form!txtVendor.Text,v.Screen.Form!txtName.Text,v.Local.fPercent,v.Local.sSQL)
+		f.Intrinsic.Control.EndIf
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		f.Intrinsic.Control.CallSub("Calculate_Freight_Cost_and_Update")	
+		f.Intrinsic.Control.CallSub("Unload")	
+	f.Intrinsic.Control.EndIf	
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdOK_Click.End
+
+Program.Sub.Form_UnLoad.Start
+v.Passed.777777.Set(1)
+f.Intrinsic.Control.CallSub("Unload")
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.Calculate_Freight_Cost_and_Update.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	v.Local.sRet.Declare
+	v.Local.fPercent.Declare
+	v.Local.sFlag.Declare	
+	v.Local.fFreightCostExt.Declare
+	v.Local.fTotalFreight.Declare
+	v.Local.sTotalFreight.Declare
+	V.Local.iRow.Declare
+	V.Local.iC.Declare
+	V.Local.sReadRow.Declare	
+	v.Local.sPart.Declare
+	v.Local.sLoc.Declare
+	v.Local.fQtyReceived.Declare
+	v.Local.fPurchCost.Declare	
+
+	'Check the percentage
+	f.Intrinsic.String.Build("Select Percent from GCG_5462_Pct where Vendor = '{0}'",Variable.Passed.000004,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+	v.Local.fPercent.Set(v.Local.sRet)
+	f.Intrinsic.Control.If(v.Local.fPercent,<>,0)
+	
+		'Scan AUX001 to get the Received Part, Loc, QtyReceived		
+		F.Intrinsic.BDF.Load("AUX001","AUX001")
+		F.Intrinsic.BDF.Clone("AUX001","Clone")
+		F.Intrinsic.BDF.ReadRowCount("AUX001",V.Local.iRow)
+		F.Intrinsic.Math.Sub(V.Local.iRow,1,V.Local.iRow)
+		
+		v.Local.fTotalFreight.Set(0)
+		F.Intrinsic.Control.For(V.Local.iC,0,V.Local.iRow,1)			
+			'Read row 
+			F.Intrinsic.BDF.ReadRow("AUX001",V.Local.iC,V.Local.sReadRow)
+			F.Intrinsic.String.Split(V.Local.sReadRow,"|~|",V.Local.sReadRow)
+			v.Local.sPart.Set(v.Local.sReadRow(1))
+			v.Local.sLoc.Set(v.Local.sReadRow(3))
+			v.Local.fQtyReceived.Set(v.Local.sReadRow(14))		
+			v.Local.fPurchCost.Set(v.Local.sReadRow(15))
+			
+			f.Intrinsic.Control.If(v.Local.fQtyReceived,>,0)
+				'Freight Cost Extension: Freight cost = Percentage * Purchase Cost * Qty Received
+				f.Intrinsic.Math.Mult(v.Local.fQtyReceived,v.Local.fPurchCost,v.Local.fFreightCostExt)
+				f.Intrinsic.Math.Mult(v.Local.fFreightCostExt,v.Local.fPercent,v.Local.fFreightCostExt)
+				f.Intrinsic.Math.Div(v.Local.fFreightCostExt,100,v.Local.fFreightCostExt)
+				'Add to Total Freight
+				f.Intrinsic.Math.Add(v.Local.fTotalFreight,v.Local.fFreightCostExt,v.Local.fTotalFreight)				
+			f.Intrinsic.Control.EndIf	
+		F.Intrinsic.Control.Next(V.Local.iC)
+		
+		'Set total freight to the screen		
+		f.Intrinsic.String.Format(v.Local.fTotalFreight,"0.00",v.Local.sTotalFreight)
+		Variable.Passed.000008.Set(v.Local.sTotalFreight)
+		Variable.Passed.000149.Set(v.Local.sTotalFreight)
+		
+	f.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Calculate_Freight_Cost_and_Update.End
+
+Program.Sub.UnLoad.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.con.State,=,1)
+		F.ODBC.Connection!con.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	Function.Intrinsic.String.Build("Subroutine Error {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.UnLoad.End

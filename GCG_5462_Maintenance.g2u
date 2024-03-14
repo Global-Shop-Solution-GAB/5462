@@ -1,0 +1,444 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("Maintenance - Vendor Percentage for Freight Calculation")
+Gui.Form..Size(7755,10935)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.gsVend.Create(GsGridControl)
+Gui.Form.gsVend.Size(7380,9135)
+Gui.Form.gsVend.Position(120,1245)
+Gui.Form.gsVend.Event(RowCellClick,gsVend_RowCellClick)
+Gui.Form.gsVend.Event(CellValueChanged,gsVend_CellValueChanged)
+Gui.Form.gsVend.TabStop(True)
+Gui.Form.gsVend.TabIndex(6)
+Gui.Form.txtVendor.Create(TextBox,"",True,645,300,0,195,450,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtVendor.MaxLength(6)
+Gui.Form.txtVendor.TabStop(True)
+Gui.Form.txtVendor.TabIndex(1)
+Gui.Form.txtNameVendor.Create(TextBox,"",True,2970,300,0,960,450,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtNameVendor.MaxLength(30)
+Gui.Form.txtNameVendor.TabStop(True)
+Gui.Form.txtNameVendor.TabIndex(2)
+Gui.Form.cmdBrowseVendor.Create(Button)
+Gui.Form.cmdBrowseVendor.Size(480,375)
+Gui.Form.cmdBrowseVendor.Position(4020,420)
+Gui.Form.cmdBrowseVendor.Caption("^")
+Gui.Form.cmdBrowseVendor.Event(Click,cmdBrowseVendor_Click)
+Gui.Form.cmdBrowseVendor.TabStop(True)
+Gui.Form.cmdBrowseVendor.TabIndex(3)
+Gui.Form.txtPercent.Create(TextBox,"",True,495,300,0,4635,450,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtPercent.NumericOnly(1)
+Gui.Form.txtPercent.TabStop(True)
+Gui.Form.txtPercent.TabIndex(4)
+Gui.Form.cmdAdd.Create(Button)
+Gui.Form.cmdAdd.Size(855,375)
+Gui.Form.cmdAdd.Position(6585,420)
+Gui.Form.cmdAdd.Caption("Add")
+Gui.Form.cmdAdd.Event(Click,cmdAdd_Click)
+Gui.Form.cmdAdd.TabStop(True)
+Gui.Form.cmdAdd.TabIndex(5)
+Gui.Form.lbl1.Create(Label,"Vendor",True,660,255,0,225,240,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl2.Create(Label,"Name",True,660,255,0,960,240,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl3.Create(Label,"Percent",True,750,255,0,4575,240,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl4.Create(Label,"(e.g. 10 for 10%)",True,1380,255,0,5160,525,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl5.Create(Label,"Password to Modify in Live (6 chars.)",True,2910,255,0,120,945,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtPassword.Create(TextBox,"",True,870,300,0,3060,855,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtPassword.Event(LostFocus,txtPassword_LostFocus)
+Gui.Form.txtPassword.MaxLength(6)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN, Mar 19, 2019
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sRet.Declare
+	V.Local.bSecurity.Declare
+	
+	f.ODBC.Connection!conx.OpenCompanyConnection
+	
+	f.Global.Security.IsInGroup(v.Caller.User,"VENDPCT",v.Caller.CompanyCode,v.Local.bSecurity)
+	f.Intrinsic.Control.If(v.Local.bSecurity.Not)
+		f.Intrinsic.UI.Msgbox("User is not in security group to use this program")
+		f.Intrinsic.Control.CallSub("Unload")
+	f.Intrinsic.Control.EndIf
+	'Populate Password
+	f.ODBC.Connection!conx.ExecuteAndReturn("Select Top 1 PWD from GCG_5462_PWD",v.Local.sRet)
+	gui.Form.txtPassword.Text(v.Local.sRet.Left6)
+	
+	'Initialize table
+	f.Intrinsic.Control.CallSub("Initialize_Vend_Table")
+	'Add gridview and format
+	gui.Form.gsVend.AddGridviewFromDatatable("GVMain","Vend")
+	f.Intrinsic.Control.CallSub("Format_gsVend")
+	gui.Form.gsVend.MainView("GVMain")
+	
+	gui.Form.gsVend.Anchor(15)
+	gui.Form..Show
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Main.End
+
+Program.Sub.UnLoad.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.con.State,=,1)
+		F.ODBC.Connection!con.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	Function.Intrinsic.String.Build("Subroutine Error {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.UnLoad.End
+
+Program.Sub.Initialize_Vend_Table.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	
+	f.Data.DataTable.CreateFromSQL("Vend","conx","Select Vendor, Name, Percent from GCG_5462_Pct order by Vendor",True)
+	f.Data.DataTable.AddColumn("Vend","Delete","String")
+	f.Data.DataView.Create("Vend","VendDV")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Initialize_Vend_Table.End
+
+Program.Sub.Format_gsVend.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	
+	gui.Form.gsVend.SuspendLayout()
+		
+	'General format for the grid
+	Gui.Form.gsVend.SetGridViewProperty("GVMain","AllowSort",True)
+	Gui.Form.gsVend.SetGridViewProperty("GVMain","AllowFilter",True)
+	Gui.Form.gsVend.SetGridViewProperty("GVMain","OptionsFindAlwaysVisible",True)
+	Gui.Form.gsVend.SetGridViewProperty("GVMain","EnableAppearanceOddRow",False)
+	Gui.Form.gsVend.SetGridViewProperty("GVMain","OptionsViewShowAutoFilterRow",True)	
+	
+	'Width	
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Vendor,Delete","sProperty","Width","sWidth","40")
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Name","sProperty","Width","sWidth","180")
+	'Caption
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Percent@Percent %","sProperty","Caption")
+	'Header Font bold
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Vendor,Name,Percent,Delete","sProperty","HeaderFontBold")
+	'HeaderHAlignment_Far	
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Percent","sProperty","HeaderAllign_Far")
+	'HeaderAllign_Center	
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Delete","sProperty","HeaderAllign_Center")
+	'CellHAlignment_Center	
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Delete","sProperty","CellHAlignment_Center")
+	'For_Row_CellClick
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Delete","sProperty","For_RowCell_Click")
+	'For_CellValue_Changed
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Percent","sProperty","For_CellValue_Changed")	
+	'Decimal_2
+	f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsVend","GV","GVMain","sInputColumns","Percent","sProperty","Decimal_2")
+	'Editor button
+	gui.Form.gsVend.ColumnEdit("GVMain","Delete","EditorButton","Delete")
+	
+	gui.Form.gsVend.ResumeLayout()
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry	
+Program.Sub.Format_gsVend.End
+
+Program.Sub.cmdAdd_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	v.Local.sRet.Declare
+	v.Local.sName.Declare
+	v.Local.fPercent.Declare
+	v.Local.sFilter.Declare
+	
+	'Check vendor before moving on
+	f.Intrinsic.String.Build("Select Vendor from V_Vendor_Master where Vendor = '{0}'",v.Screen.Form!txtVendor.Text,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+	f.Intrinsic.Control.if(v.Local.sRet.Trim,=,"")
+		f.Intrinsic.UI.Msgbox("Vendor does not exist","Invalid Vendor")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	v.Local.sName.Set(v.Screen.Form!txtNameVendor.Text)
+	'Percent must be positive.
+	v.Local.fPercent.Set(v.Screen.Form!txtPercent.Text)
+	f.Intrinsic.Control.if(v.Local.fPercent,<=,0)
+		f.Intrinsic.UI.Msgbox("Percent must be positive.","Invalid Percent")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	'Check if Vendor exist in the grid
+	f.Intrinsic.String.Build("Vendor = '{0}'",v.Screen.Form!txtVendor.Text,v.Local.sFilter)
+	f.Data.DataView.SetFilter("Vend","VendDV",v.Local.sFilter)
+	f.Intrinsic.Control.If(v.DataView.Vend!VendDV.RowCount,>,0)
+		f.Intrinsic.UI.Msgbox("Vendor exist in the grid","Attention")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	f.Data.DataTable.AddRow("Vend","Vendor",v.Screen.Form!txtVendor.Text,"Name",v.Local.sName.PSQLFriendly,"Delete","Delete","Percent",v.Local.fPercent)
+	f.Intrinsic.String.Build("Select * from GCG_5462_Pct where Vendor = '{0}'",v.Screen.Form!txtVendor.Text,v.Local.sSQL)
+	f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+	f.Intrinsic.Control.If(v.Local.sRet,=,"")
+		f.Intrinsic.String.Build("Insert into GCG_5462_Pct (Vendor,Name,Percent) values('{0}','{1}',{2})",v.Screen.Form!txtVendor.Text,v.Local.sName.PSQLFriendly,v.Local.fPercent,v.Local.sSQL)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.String.Build("Update GCG_5462_Pct set Name = '{1}', Percent = {2} where Vendor = '{0}'",v.Screen.Form!txtVendor.Text,v.Local.sName.PSQLFriendly,v.Local.fPercent,v.Local.sSQL)
+	f.Intrinsic.Control.EndIf
+	f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdAdd_Click.End
+
+Program.Sub.Form_UnLoad.Start
+f.Intrinsic.Control.CallSub("Unload")
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.gsVend_CellValueChanged.Start
+F.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sColumn.Declare
+	v.Local.sSQL.Declare
+	
+	f.Intrinsic.String.UCase(v.Args.Column,v.Local.sColumn)
+	f.Intrinsic.Control.If(v.Local.sColumn,=,"PERCENT")
+		'Update Percent
+		f.Intrinsic.String.Build("Update GCG_5462_Pct set Percent = {1} where Vendor = '{0}'",V.DataTable.Vend(V.Args.RowIndex).Vendor!FieldValString,V.DataTable.Vend(V.Args.RowIndex).Percent!FieldValString,v.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+	f.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.gsVend_CellValueChanged.End
+
+Program.Sub.gsVend_RowCellClick.Start
+F.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sColumn.Declare
+	v.Local.sSQL.Declare
+	
+	f.Intrinsic.String.UCase(v.Args.Column,v.Local.sColumn)
+	f.Intrinsic.Control.If(v.Local.sColumn,=,"DELETE")
+		'Update Percent
+		f.Intrinsic.String.Build("Delete from GCG_5462_Pct where Vendor = '{0}'",V.DataTable.Vend(V.Args.RowIndex).Vendor!FieldValString,v.Local.sSQL)
+		f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		f.Data.DataTable.DeleteRow("Vend",v.Args.RowIndex)
+		f.Data.DataTable.AcceptChanges("Vend")
+	f.Intrinsic.Control.EndIf
+	
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.gsVend_RowCellClick.End
+
+Program.Sub.FormatBulk.Start
+f.Intrinsic.Control.Try
+	V.Local..BulkDeclareString(sError,sColumns,sHold)
+	v.Local..BulkDeclareLong(iCnt)
+	v.Local.sColor.Declare
+	
+f.Intrinsic.String.Split(v.Args.sInputColumns,",",v.Local.sColumns)
+
+	F.Intrinsic.Control.SelectCase(v.Args.sProperty)
+		
+		F.Intrinsic.Control.Case("MinWidth")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MinWidth",v.Args.sWidth)
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			
+		F.Intrinsic.Control.Case("MaxWidth")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MaxWidth",v.Args.sWidth)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Width")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Width",v.Args.sWidth)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Invisible")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Visible",False)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("VisibleIndex")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"VisibleIndex",v.Local.iCnt)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Caption")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				f.Intrinsic.String.Split(v.Local.sColumns(v.Local.iCnt),"@",v.Local.sHold)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sHold(0),"Caption",v.Local.sHold(1))			
+			f.Intrinsic.Control.Next(v.Local.iCnt)				
+
+		F.Intrinsic.Control.Case("HeaderAllign_Far")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderHAlignment","Far")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderAllign_Center")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderHAlignment","Center")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderAllign_Top")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderVAlignment","Top")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderFontBold")	
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderFontBold",True)			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("HeaderWordWrap")	
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderWordWrap","Wrap")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellHAlignment_Center")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellHAlignment","Center")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellHAlignment_Far")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellHAlignment","Far")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("Decimal_2")	
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"DisplayCustomNumeric","###,###,###,##0.00")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("For_CellValue_Changed")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"AllowEdit",True)	
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"ReadOnly",False)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("For_RowCell_Click")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"AllowEdit",False)	
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"ReadOnly",True)				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("DisplayCustomDatetime")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"DisplayCustomDatetime","d")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		f.Intrinsic.Control.Case("SummaryItem")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].AddSummaryItem(v.Args.GV,v.Local.sColumns(v.Local.iCnt),v.Local.sHold,"Sum","","","n")			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+			f.Intrinsic.String.Build("Sum_{0}",v.Local.sColumns(v.Local.iCnt),v.Local.sHold)
+
+		f.Intrinsic.Control.Case("FixedColumn_Left")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Fixed","Left")				
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+		F.Intrinsic.Control.Case("CellBackColor")
+			f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+				gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"CellBackColor",v.Args.sColor)			
+			f.Intrinsic.Control.Next(v.Local.iCnt)
+
+	F.Intrinsic.Control.EndSelect		
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.FormatBulk.End
+
+Program.Sub.cmdBrowseVendor_Click.Start
+'Browse vendor
+F.Intrinsic.Control.Try
+	V.Local..BulkDeclareString(sError,sRet)
+	
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.UI.Browser(300,"",V.Local.sRet)
+	F.Intrinsic.Control.If(V.Local.sRet.IsCancel,=,False)
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		gui.Form.txtVendor.Text(v.Local.sRet(0))
+		gui.Form.txtNameVendor.Text(v.Local.sRet(1))
+		gui.Form.txtPercent.SetFocus()
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdBrowseVendor_Click.End
+
+Program.Sub.txtPassword_LostFocus.Start
+'This save the password so the administrator can enter the percentage in live at other user session when there is no percentage for a vendor.
+F.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	v.Local.sRet.Declare
+	v.Local.iCount.Declare
+	v.Local.sPWD.Declare
+	V.Local.bInstr.Declare
+	
+	v.Local.sPWD.Set(v.Screen.Form!txtPassword.Text)
+	f.Intrinsic.Control.If(v.Local.sPWD.Length,<>,6)
+		f.Intrinsic.UI.Msgbox("Password to Modify in Live must be 6 chars")
+		gui.Form.txtPassword.Text("")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.String.IsInString(v.Local.sPWD,"'",True,v.Local.bInstr)
+	f.Intrinsic.Control.If(v.Local.bInstr)
+		f.Intrinsic.UI.Msgbox("Password must not containt single quote '.")
+		gui.Form.txtPassword.Text("")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	f.ODBC.Connection!conx.Execute("Delete from GCG_5462_PWD")
+	f.Intrinsic.String.Build("Insert into GCG_5462_PWD (PWD) values('{0}')",v.Local.sPWD.PSQLFriendly,v.Local.sSQL)
+	f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+	gui.Form.txtPassword.Text(v.Local.sPWD.PSQLFriendly)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}GAB Version: {5}}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+
+Program.Sub.txtPassword_LostFocus.End
